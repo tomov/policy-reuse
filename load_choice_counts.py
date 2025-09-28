@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-Script to load and analyze the summary_subject_x_choice_counts.csv data.
-This data contains choice counts for different policy reuse strategies across subjects.
-"""
 
 #%% [markdown]
 # ## Preliminaries
@@ -15,16 +11,16 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import matplotlib.pyplot as plt
 
 
 #%% [code]
 # Load data
 
-file_path = "policy-composition-momchil/Output/V0.3_pilot/files/summaries/summary_subject_x_choice_counts.csv"
+file_path = "summary_subject_x_choice_counts.csv"
     
 df_all = pd.read_csv(file_path, dtype='int64')
-df_all = df_all.head(3)
-
+#df_all = df_all.head(3)
 
 
 # %% [code]
@@ -45,15 +41,10 @@ num_options = [1, 1, 1, 1, 1, 4]
 
 # Get the empirical choice counts as <n, k>, where n is the number of subjects and k is the number of columns
 df_counts = df_all[choice_columns]
+assert all(df_counts.sum(axis=1) == 27), "Not all rows sum to 27"
 
 # Get the number of options as <n, k>
 df_num_options = pd.DataFrame(np.tile(num_options, (len(df_counts), 1)), columns=df_counts.columns)
-
-# %% [code]
-# Sanity check that all columns sum to 27 == the number of test trials per subject
-
-df_totals = df_counts.sum(axis=1)
-assert all(df_totals == 27), f"Not all rows sum to 27. Found sums: {df_totals.unique()}"
 
 
 # %% [code]
@@ -87,6 +78,10 @@ def get_probability_of_uniformly_choosing_among(column_names: list[str]) -> pd.D
     proportions = counts / df_counts.sum(axis=1) / df_num_options[column_names].sum(axis=1)
     return proportions
 
+def BIC(log_likelihood: pd.Series, num_parameters: int, num_observations: pd.Series) -> pd.Series:
+    """ Compute the BIC """
+    return num_parameters * np.log(num_observations) - 2 * log_likelihood
+
 class Parameter:
     """ Multinomial parameter """
     
@@ -118,6 +113,7 @@ class Hypothesis:
         self.parameters = parameters
         self.df_column_probabilities = None
         self.log_likelihood = None
+        self.bic = None
         
         # Add noise parameter for all columns that are not assigned to a parameter
         assigned_columns = set().union(*[param.column_names for param in parameters])
@@ -135,8 +131,10 @@ class Hypothesis:
             self.df_column_probabilities *= df_num_options
         assert np.allclose(df_proportions.sum(axis=1), 1.0), f"Rows don't sum to 1: {df_proportions.sum(axis=1)}"
 
-        # Get the log likelihood as <n, 1>
+        # Get the log likelihood and BIC as <n, 1>
         self.log_likelihood = np.sum(df_counts * np.log(self.df_column_probabilities), axis=1)
+        self.bic = BIC(self.log_likelihood, len(self.parameters) - 1, df_counts.sum(axis=1))
+
 
 # %% [code]
 # Define hypotheses
@@ -183,6 +181,34 @@ hypotheses = [H0, H1, H2, H3, H4, H5, H6]
 [H.fit() for H in hypotheses]
 
 log_likelihoods = np.column_stack([H.log_likelihood for H in hypotheses])
-
+bics = np.column_stack([H.bic for H in hypotheses])
     
-# %%
+# %% [code]
+# Create bar plot of BICs with standard errors
+
+# Calculate means and standard errors for BICs
+bic_means = np.mean(bics, axis=0)
+bic_sems = np.std(bics, axis=0) / np.sqrt(bics.shape[0])
+
+# Get hypothesis names
+hypothesis_names = [H.name for H in hypotheses]
+
+# Create the bar plot
+plt.figure(figsize=(10, 6))
+bars = plt.bar(range(len(hypothesis_names)), bic_means, yerr=bic_sems, 
+               capsize=5, alpha=0.7, color='steelblue')
+
+# Customize the plot
+plt.xlabel('Hypothesis')
+plt.ylabel('BIC')
+plt.title('BIC Comparison Across Hypotheses')
+plt.xticks(range(len(hypothesis_names)), hypothesis_names, rotation=45, ha='right')
+plt.grid(axis='y', alpha=0.3)
+plt.ylim(bottom=bic_means.min() - 2*bic_sems.max(), top=bic_means.max() + 2*bic_sems.max())
+
+# Adjust layout to prevent label cutoff
+plt.tight_layout()
+plt.show()
+
+# %% [code]
+# 
