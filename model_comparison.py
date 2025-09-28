@@ -146,6 +146,7 @@ class Hypothesis:
         self.df_column_probabilities[self.noise_parameter.column_names] = self.noise_parameter.get_column_probabilities()
         if np.any(self.noise_parameter.df_mle_value < self.noise_parameter.limits[0] - 1e-10) or np.any(self.noise_parameter.df_mle_value > self.noise_parameter.limits[1] + 1e-10):
             warnings.warn(f"Noise parameter for {self.name} out of bounds: {self.noise_parameter.df_mle_value}")
+        assert np.allclose(self.df_column_probabilities.sum(axis=1), 1.0), f"Rows do not sum to 1: {self.df_column_probabilities.sum(axis=1)}"
             
         # Get the log likelihood and BIC as <n, 1>
         self.log_likelihood = np.sum(df_counts * np.log(self.df_column_probabilities), axis=1)
@@ -232,8 +233,5 @@ plot_model_comparison(bics, 'BIC', hypotheses)
 plot_model_comparison(log_likelihoods, 'Log-likelihood', hypotheses)
 
 
-# 
-
-# %%
 
 # %%
