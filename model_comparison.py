@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.pyplot as plt
+import warnings
 
 
 #%% [code]
@@ -20,7 +21,7 @@ import matplotlib.pyplot as plt
 file_path = "summary_subject_x_choice_counts.csv"
     
 df_all = pd.read_csv(file_path, dtype='int64')
-#df_all = df_all.head(3)
+df_all = df_all.head(3)
 
 
 # %% [code]
@@ -74,9 +75,7 @@ def get_probability_of_uniformly_choosing_among(column_names: list[str]) -> pd.D
     :param column_names: the columns of interest
     :return: <n, 1> the MLE probability of the options in the column names, assuming it is the same for all of them
     """
-    counts = df_counts[column_names].sum(axis=1)
-    proportions = counts / df_counts.sum(axis=1) / df_num_options[column_names].sum(axis=1)
-    return proportions
+    return df_counts[column_names].sum(axis=1) / df_counts.sum(axis=1) / df_num_options[column_names].sum(axis=1)
 
 def BIC(log_likelihood: pd.Series, num_parameters: int, num_observations: pd.Series) -> pd.Series:
     """ Compute the BIC """
@@ -100,6 +99,13 @@ class Parameter:
         """ Fit the parameter """
         self.df_mle_value = get_probability_of_uniformly_choosing_among(self.column_names)
         self.df_mle_value = self.df_mle_value.clip(lower=self.limits[0], upper=self.limits[1])
+        
+    def get_column_probabilities(self) -> pd.DataFrame:
+        """Get the column probabilities for the parameter
+        :return: <n, c> the column probabilities for the parameter, where c is the number of columns it encompasses
+        """
+        tiled_proportions = np.tile(self.df_mle_value.values[:, np.newaxis], (1, len(self.column_names)))
+        return tiled_proportions * df_num_options[self.column_names]
 
 class Hypothesis:
     """ Simple hypothesis about the multinomial distribution parameters """
@@ -112,12 +118,14 @@ class Hypothesis:
         self.name = name
         self.parameters = parameters
         self.df_column_probabilities = None
+        self.noise_parameter = None
         self.log_likelihood = None
         self.bic = None
         
-        # Add noise parameter for all columns that are not assigned to a parameter
-        assigned_columns = set().union(*[param.column_names for param in parameters])
-        self.parameters.append(Parameter('e', [col for col in choice_columns if col not in assigned_columns], (0, 1/9)))
+    def get_noise_parameter(self) -> Parameter:
+        """Get the noise parameter for the hypothesis"""
+        assigned_columns = set().union(*[param.column_names for param in self.parameters])
+        return Parameter('e', [col for col in choice_columns if col not in assigned_columns], (0, 1/9))
         
     def fit(self):
         """ Fit the hypothesis """
@@ -126,14 +134,22 @@ class Hypothesis:
         self.df_column_probabilities = pd.DataFrame(np.zeros(df_counts.shape, dtype=float), columns=df_counts.columns)
         for parameter in self.parameters:
             parameter.fit()
-            tiled_proportions = np.tile(parameter.df_mle_value.values[:, np.newaxis], (1, len(parameter.column_names)))
-            self.df_column_probabilities[parameter.column_names] = tiled_proportions    
-            self.df_column_probabilities *= df_num_options
-        assert np.allclose(df_proportions.sum(axis=1), 1.0), f"Rows don't sum to 1: {df_proportions.sum(axis=1)}"
-
+            self.df_column_probabilities[parameter.column_names] =  parameter.get_column_probabilities()   
+            
+        assert np.all(self.df_column_probabilities.sum(axis=1) <= 1.0 + 1e-10), f"Rows sum to more than 1: {self.df_column_probabilities.sum(axis=1)}"
+        assert np.all(self.df_column_probabilities.sum(axis=1) >= 0.0 - 1e-10), f"Rows sum to less than 0: {self.df_column_probabilities.sum(axis=1)}"
+        
+        # Take special care for the noise parameter. 
+        # It it takes only any leftover probability, after accounting for the other parameters and their limits.
+        self.noise_parameter = self.get_noise_parameter()
+        self.noise_parameter.df_mle_value = (1.0 - self.df_column_probabilities.sum(axis=1)) / df_num_options[self.noise_parameter.column_names].sum(axis=1)
+        self.df_column_probabilities[self.noise_parameter.column_names] = self.noise_parameter.get_column_probabilities()
+        if np.any(self.noise_parameter.df_mle_value < self.noise_parameter.limits[0] - 1e-10) or np.any(self.noise_parameter.df_mle_value > self.noise_parameter.limits[1] + 1e-10):
+            warnings.warn(f"Noise parameter for {self.name} out of bounds: {self.noise_parameter.df_mle_value}")
+            
         # Get the log likelihood and BIC as <n, 1>
         self.log_likelihood = np.sum(df_counts * np.log(self.df_column_probabilities), axis=1)
-        self.bic = BIC(self.log_likelihood, len(self.parameters) - 1, df_counts.sum(axis=1))
+        self.bic = BIC(self.log_likelihood, len(self.parameters), df_counts.sum(axis=1))
 
 
 # %% [code]
@@ -153,27 +169,27 @@ H2 = Hypothesis("Policy reuse uniform",
                 [Parameter('p', ['policy reuse max rew. test','policy reuse min rew. test','policy reuse uncued'], (1/9, 1))])
 
 # H3: [e,p,q,e,e,4e]
-H1 = Hypothesis("Policy reuse cued", 
+H3 = Hypothesis("Policy reuse cued", 
                 [Parameter('p', ['policy reuse max rew. test'], (1/9, 1)), 
                  Parameter('q', ['policy reuse min rew. test'], (1/9, 1))])
 
-# H3: [e,p,p,e,e,4e]
-H3 = Hypothesis("Policy reuse cued uniform", 
+# H4: [e,p,p,e,e,4e]
+H4 = Hypothesis("Policy reuse cued uniform", 
                 [Parameter('p', ['policy reuse max rew. test', 'policy reuse min rew. test'], (1/9, 1))])
 
-# H4: [e,p,e,e,e,4e]
-H4 = Hypothesis("Policy reuse best", 
+# H5: [e,p,e,e,e,4e]
+H5 = Hypothesis("Policy reuse best", 
                 [Parameter('p', ['policy reuse max rew. test'], (1/9, 1))])
 
-# H5: [e,e,e,e,p,4e]
-H5 = Hypothesis("MB/GPI", 
+# H6: [e,e,e,e,p,4e]
+H6 = Hypothesis("MB/GPI", 
                 [Parameter('p', ['mb/gpi'], (1/9, 1))])
 
-# H6: [p,e,e,e,e,4e]
-H6 = Hypothesis("GPI zero", 
+# H7: [p,e,e,e,e,4e]
+H7 = Hypothesis("GPI zero", 
                 [Parameter('p', ['gpi zero'], (1/9, 1))])
 
-hypotheses = [H0, H1, H2, H3, H4, H5, H6]
+hypotheses = [H0, H1, H2, H3, H4, H5, H6, H7]
 
 # %% [code]
 # Fit the hypotheses
@@ -187,28 +203,37 @@ bics = np.column_stack([H.bic for H in hypotheses])
 # Create bar plot of BICs with standard errors
 
 # Calculate means and standard errors for BICs
-bic_means = np.mean(bics, axis=0)
-bic_sems = np.std(bics, axis=0) / np.sqrt(bics.shape[0])
+def plot_model_comparison(data, metric_name, hypotheses):
+    """Plot bar chart with error bars for model comparison metrics"""
+    means = np.mean(data, axis=0)
+    sems = np.std(data, axis=0) / np.sqrt(data.shape[0])
+    
+    # Get hypothesis names
+    hypothesis_names = [H.name for H in hypotheses]
+    
+    # Create the bar plot
+    plt.figure(figsize=(10, 6))
+    bars = plt.bar(range(len(hypothesis_names)), means, yerr=sems, 
+                   capsize=5, alpha=0.7, color='steelblue')
+    
+    # Customize the plot
+    plt.xlabel('Hypothesis')
+    plt.ylabel(metric_name)
+    plt.title('Model comparison')
+    plt.xticks(range(len(hypothesis_names)), hypothesis_names, rotation=45, ha='right')
+    plt.grid(axis='y', alpha=0.3)
+    plt.ylim(bottom=means.min() - 2*sems.max(), top=means.max() + 2*sems.max())
+    
+    # Adjust layout to prevent label cutoff
+    plt.tight_layout()
+    plt.show()
 
-# Get hypothesis names
-hypothesis_names = [H.name for H in hypotheses]
+plot_model_comparison(bics, 'BIC', hypotheses)
+plot_model_comparison(log_likelihoods, 'Log-likelihood', hypotheses)
 
-# Create the bar plot
-plt.figure(figsize=(10, 6))
-bars = plt.bar(range(len(hypothesis_names)), bic_means, yerr=bic_sems, 
-               capsize=5, alpha=0.7, color='steelblue')
 
-# Customize the plot
-plt.xlabel('Hypothesis')
-plt.ylabel('BIC')
-plt.title('BIC Comparison Across Hypotheses')
-plt.xticks(range(len(hypothesis_names)), hypothesis_names, rotation=45, ha='right')
-plt.grid(axis='y', alpha=0.3)
-plt.ylim(bottom=bic_means.min() - 2*bic_sems.max(), top=bic_means.max() + 2*bic_sems.max())
-
-# Adjust layout to prevent label cutoff
-plt.tight_layout()
-plt.show()
-
-# %% [code]
 # 
+
+# %%
+
+# %%
