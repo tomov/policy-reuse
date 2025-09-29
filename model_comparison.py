@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 #%% [markdown]
 # ## Preliminaries
 
@@ -14,6 +12,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import warnings
 from groupBMC.groupBMC import GroupBMC
+
+np.set_printoptions(suppress=True,precision=3)
 
 
 #%% [code]
@@ -257,5 +257,14 @@ bms = GroupBMC(lmes.transpose())
 bms_result = bms.get_result()
 
 print(f'BMS protected exceedance probability: {bms_result.protected_exceedance_probability}')
+
+# %% [code]
+# Group BMC with families
+
+lmes = -0.5 * bics
+bms_fam = GroupBMC(lmes.transpose(), partitions=[[1],[2,3,4,5,6],[7],[8],[9,10]])
+bms_result_fam = bms_fam.get_result()
+
+print(f'BMS family protected exceedance probability: {bms_result_fam.protected_exceedance_probability}')
 
 # %%
