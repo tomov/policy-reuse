@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.pyplot as plt
 import warnings
+from groupBMC.groupBMC import GroupBMC
 
 
 #%% [code]
@@ -21,7 +22,7 @@ import warnings
 file_path = "summary_subject_x_choice_counts.csv"
     
 df_all = pd.read_csv(file_path, dtype='int64')
-df_all = df_all.head(3)
+#df_all = df_all.head(3)
 
 
 # %% [code]
@@ -136,17 +137,18 @@ class Hypothesis:
             parameter.fit()
             self.df_column_probabilities[parameter.column_names] =  parameter.get_column_probabilities()   
             
-        assert np.all(self.df_column_probabilities.sum(axis=1) <= 1.0 + 1e-10), f"Rows sum to more than 1: {self.df_column_probabilities.sum(axis=1)}"
-        assert np.all(self.df_column_probabilities.sum(axis=1) >= 0.0 - 1e-10), f"Rows sum to less than 0: {self.df_column_probabilities.sum(axis=1)}"
+        assert np.all(self.df_column_probabilities.sum(axis=1) <= 1.0 + 1e-10), f"Rows for {self.name} sum to more than 1: {self.df_column_probabilities.sum(axis=1)}"
+        assert np.all(self.df_column_probabilities.sum(axis=1) >= 0.0 - 1e-10), f"Rows for {self.name} sum to less than 0: {self.df_column_probabilities.sum(axis=1)}"
         
         # Take special care for the noise parameter. 
         # It it takes only any leftover probability, after accounting for the other parameters and their limits.
         self.noise_parameter = self.get_noise_parameter()
+        #self.noise_parameter.fit() # <-- doesn't always work, e.g. if other options are not even chosen
         self.noise_parameter.df_mle_value = (1.0 - self.df_column_probabilities.sum(axis=1)) / df_num_options[self.noise_parameter.column_names].sum(axis=1)
         self.df_column_probabilities[self.noise_parameter.column_names] = self.noise_parameter.get_column_probabilities()
         if np.any(self.noise_parameter.df_mle_value < self.noise_parameter.limits[0] - 1e-10) or np.any(self.noise_parameter.df_mle_value > self.noise_parameter.limits[1] + 1e-10):
             warnings.warn(f"Noise parameter for {self.name} out of bounds: {self.noise_parameter.df_mle_value}")
-        assert np.allclose(self.df_column_probabilities.sum(axis=1), 1.0), f"Rows do not sum to 1: {self.df_column_probabilities.sum(axis=1)}"
+        assert np.allclose(self.df_column_probabilities.sum(axis=1), 1.0), f"Rows for {self.name} do not sum to 1: {self.df_column_probabilities.sum(axis=1)}"
             
         # Get the log likelihood and BIC as <n, 1>
         self.log_likelihood = np.sum(df_counts * np.log(self.df_column_probabilities), axis=1)
@@ -163,7 +165,7 @@ H0 = Hypothesis("Uniform", [])
 H1 = Hypothesis("Policy reuse", 
                 [Parameter('p', ['policy reuse max rew. test'], (1/9, 1)), 
                  Parameter('q', ['policy reuse min rew. test'], (1/9, 1)), 
-                 Parameter('r', ['policy reuse uncued'], (1/9, 1))])
+                 Parameter('r', ['policy reuse uncued'], (0, 1))])
 
 # H2: [e,p,p,p,e,4e]
 H2 = Hypothesis("Policy reuse uniform", 
@@ -233,5 +235,12 @@ plot_model_comparison(bics, 'BIC', hypotheses)
 plot_model_comparison(log_likelihoods, 'Log-likelihood', hypotheses)
 
 
+
+# %% [code]
+# Group BMC
+
+lmes = -0.5 * bics
+bms = GroupBMC(lmes.transpose())
+bms_result = bms.get_result()
 
 # %%
