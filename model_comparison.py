@@ -136,7 +136,6 @@ class Hypothesis:
         for parameter in self.parameters:
             parameter.fit()
             self.df_column_probabilities[parameter.column_names] =  parameter.get_column_probabilities()   
-            
         #assert np.all(self.df_column_probabilities.sum(axis=1) <= 1.0 + 1e-10), f"Rows for {self.name} sum to more than 1: {self.df_column_probabilities.sum(axis=1)}"
         #assert np.all(self.df_column_probabilities.sum(axis=1) >= 0.0 - 1e-10), f"Rows for {self.name} sum to less than 0: {self.df_column_probabilities.sum(axis=1)}"
         
@@ -257,6 +256,6 @@ lmes = -0.5 * bics
 bms = GroupBMC(lmes.transpose())
 bms_result = bms.get_result()
 
-print(bms_result.protected_exceedance_probability)
+print(f'BMS protected exceedance probability: {bms_result.protected_exceedance_probability}')
 
 # %%
