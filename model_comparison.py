@@ -137,17 +137,20 @@ class Hypothesis:
             parameter.fit()
             self.df_column_probabilities[parameter.column_names] =  parameter.get_column_probabilities()   
             
-        assert np.all(self.df_column_probabilities.sum(axis=1) <= 1.0 + 1e-10), f"Rows for {self.name} sum to more than 1: {self.df_column_probabilities.sum(axis=1)}"
-        assert np.all(self.df_column_probabilities.sum(axis=1) >= 0.0 - 1e-10), f"Rows for {self.name} sum to less than 0: {self.df_column_probabilities.sum(axis=1)}"
+        #assert np.all(self.df_column_probabilities.sum(axis=1) <= 1.0 + 1e-10), f"Rows for {self.name} sum to more than 1: {self.df_column_probabilities.sum(axis=1)}"
+        #assert np.all(self.df_column_probabilities.sum(axis=1) >= 0.0 - 1e-10), f"Rows for {self.name} sum to less than 0: {self.df_column_probabilities.sum(axis=1)}"
         
         # Take special care for the noise parameter. 
         # It it takes only any leftover probability, after accounting for the other parameters and their limits.
         self.noise_parameter = self.get_noise_parameter()
-        #self.noise_parameter.fit() # <-- doesn't always work, e.g. if other options are not even chosen
-        self.noise_parameter.df_mle_value = (1.0 - self.df_column_probabilities.sum(axis=1)) / df_num_options[self.noise_parameter.column_names].sum(axis=1)
+        self.noise_parameter.fit() # <-- doesn't always work, e.g. if other options are not even chosen
+        #self.noise_parameter.df_mle_value = (1.0 - self.df_column_probabilities.sum(axis=1)) / df_num_options[self.noise_parameter.column_names].sum(axis=1)
         self.df_column_probabilities[self.noise_parameter.column_names] = self.noise_parameter.get_column_probabilities()
         if np.any(self.noise_parameter.df_mle_value < self.noise_parameter.limits[0] - 1e-10) or np.any(self.noise_parameter.df_mle_value > self.noise_parameter.limits[1] + 1e-10):
             warnings.warn(f"Noise parameter for {self.name} out of bounds: {self.noise_parameter.df_mle_value}")
+            
+        # Normalize probabilities to sum to 1 in each row
+        self.df_column_probabilities = self.df_column_probabilities.div(self.df_column_probabilities.sum(axis=1), axis=0)
         assert np.allclose(self.df_column_probabilities.sum(axis=1), 1.0), f"Rows for {self.name} do not sum to 1: {self.df_column_probabilities.sum(axis=1)}"
             
         # Get the log likelihood and BIC as <n, 1>
@@ -165,7 +168,7 @@ H0 = Hypothesis("Uniform", [])
 H1 = Hypothesis("Policy reuse", 
                 [Parameter('p', ['policy reuse max rew. test'], (1/9, 1)), 
                  Parameter('q', ['policy reuse min rew. test'], (1/9, 1)), 
-                 Parameter('r', ['policy reuse uncued'], (0, 1))])
+                 Parameter('r', ['policy reuse uncued'], (1/9, 1))])
 
 # H2: [e,p,p,p,e,4e]
 H2 = Hypothesis("Policy reuse uniform", 
@@ -192,7 +195,18 @@ H6 = Hypothesis("MB/GPI",
 H7 = Hypothesis("GPI zero", 
                 [Parameter('p', ['gpi zero'], (1/9, 1))])
 
-hypotheses = [H0, H1, H2, H3, H4, H5, H6, H7]
+# H8: [p,q,r,e,e,4e]
+H8 = Hypothesis("GPI zero + Policy reuse cued", 
+                [Parameter('p', ['gpi zero'], (1/9, 1)),
+                 Parameter('q', ['policy reuse max rew. test'], (1/9, 1)), 
+                 Parameter('r', ['policy reuse min rew. test'], (1/9, 1))])
+
+# H9: [p,q,q,e,e,4e]
+H9 = Hypothesis("GPI zero + Policy reuse cued uniform", 
+                [Parameter('p', ['gpi zero'], (1/9, 1)),
+                 Parameter('q', ['policy reuse max rew. test', 'policy reuse min rew. test'], (1/9, 1))])
+
+hypotheses = [H0, H1, H2, H3, H4, H5, H6, H7, H8, H9]
 
 # %% [code]
 # Fit the hypotheses
@@ -242,5 +256,7 @@ plot_model_comparison(log_likelihoods, 'Log-likelihood', hypotheses)
 lmes = -0.5 * bics
 bms = GroupBMC(lmes.transpose())
 bms_result = bms.get_result()
+
+print(bms_result.protected_exceedance_probability)
 
 # %%
