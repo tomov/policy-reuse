@@ -1,4 +1,4 @@
-#%% [markdown]
+#%% [Markdown]
 # ## Preliminaries
 
 
@@ -48,6 +48,7 @@ assert all(df_counts.sum(axis=1) == 27), "Not all rows sum to 27"
 # Get the number of options as <n, k>
 df_num_options = pd.DataFrame(np.tile(num_options, (len(df_counts), 1)), columns=df_counts.columns)
 
+counts = df_counts.to_numpy()
 
 #%% [code]
 # Multinomial mixture EM algorithm
