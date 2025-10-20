@@ -52,7 +52,7 @@ df_num_options = pd.DataFrame(np.tile(num_options, (len(df_counts), 1)), columns
 
 
 #%% [code]
-# Define model & run you inference
+# Define model & run inference
 
 
 # counts: shape (S, 6)
