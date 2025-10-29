@@ -234,7 +234,12 @@ lmes = -0.5 * bics
 bms = GroupBMC(lmes.transpose())
 bms_result = bms.get_result()
 
-print(f'BMS protected exceedance probability: {bms_result.protected_exceedance_probability}')
+print('BMS Protected Exceedance Probability:')
+print('-' * 50)
+for i, H in enumerate(hypotheses):
+    prob = bms_result.protected_exceedance_probability[i]
+    print(f'H{i}: {H.name:40s}: {prob:.2f}')
+print('-' * 50)
 
 # %% [code]
 # Group BMC with families
@@ -243,6 +248,19 @@ lmes = -0.5 * bics
 bms_fam = GroupBMC(lmes.transpose(), partitions=[[1],[2,3,4,5,6],[7],[8],[9,10]])
 bms_result_fam = bms_fam.get_result()
 
-print(f'BMS family protected exceedance probability: {bms_result_fam.protected_exceedance_probability}')
+family_names = [
+    'Uniform (H0)',
+    'Policy reuse family (H1-H5)',
+    'MB/GPI (H6)',
+    'GPI zero (H7)',
+    'GPI zero + Policy reuse (H8-H9)'
+]
+
+print('\nBMS Family Protected Exceedance Probability:')
+print('-' * 50)
+for i, family_name in enumerate(family_names):
+    prob = bms_result_fam.protected_exceedance_probability[i]
+    print(f'{family_name:40s}: {prob:.2f}')
+print('-' * 50)
 
 # %%

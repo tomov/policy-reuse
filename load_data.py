@@ -4,7 +4,6 @@ import numpy as np
 
 def load_data(file_path="summary_subject_x_choice_counts.csv"):
     df_all = pd.read_csv(file_path, dtype='int64')
-    #df_all = df_all.head(3)
     
     # Create the new column first, then filter
     df_all['policy reuse min rew. test'] = df_all['policy reuse cued'] - df_all['policy reuse max rew. test']

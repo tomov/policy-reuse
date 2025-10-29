@@ -71,7 +71,7 @@ with pm.Model() as hybrid_model:
 
     hybrid_trace = pm.sample(2000, tune=2000, target_accept=0.9, chains=4, idata_kwargs={"log_likelihood": True})
     # predictive accuracy (subject-level pointwise log-lik is handled internally)
-    loo = az.loo(hybrid_trace)     # or az.waic(idata)
+    loo_hybrid = az.loo(hybrid_trace)     # or az.waic(idata)
     
 
 
@@ -109,7 +109,53 @@ with pm.Model() as mixture_model:
     pm.Mixture('x', w, comp_dists=[like1, like2], observed=counts)
 
     mixture_trace = pm.sample(2000, tune=2000, target_accept=0.9, idata_kwargs={"log_likelihood": True})
-    loo = az.loo(mixture_trace)
+    loo_mixture = az.loo(mixture_trace)
+
+
+
+#%% [code]
+# Define mixture model & run inference
+
+with pm.Model() as mixture_model_3:
+    # mixture weight
+    w = pm.Dirichlet('w', a=np.ones(3))
+    
+    # raw weights (positive)
+    u_n   = pm.HalfNormal('u_n', 1.0)
+    u_m   = pm.HalfNormal('u_m', 1.0)
+    u_o   = pm.HalfNormal('u_o', 1.0)
+    u_e1  = pm.HalfNormal('u_e1', 1.0)
+    u_e2  = pm.HalfNormal('u_e2', 1.0)
+    u_e3  = pm.HalfNormal('u_e3', 1.0)
+
+    # concentration
+    c1 = pm.LogNormal('c1', 0.0, 1.5)
+    c2 = pm.LogNormal('c2', 0.0, 1.5)
+    c3 = pm.LogNormal('c3', 0.0, 1.5)
+
+    # component base measures
+    theta1_raw = pm.math.stack([u_n, u_e1, u_e1, u_e1, u_e1, 4*u_e1])
+    theta2_raw = pm.math.stack([u_e2, u_m,  u_m,  u_e2, u_e2, 4*u_e2])
+    theta3_raw = pm.math.stack([u_e3, u_e3,  u_e3,  u_e3, u_o, 4*u_e3])
+    theta1 = theta1_raw / pm.math.sum(theta1_raw)
+    theta2 = theta2_raw / pm.math.sum(theta2_raw)
+    theta3 = theta3_raw / pm.math.sum(theta3_raw)
+    
+    alpha1 = c1 * theta1
+    alpha2 = c2 * theta2
+    alpha3 = c3 * theta3
+
+    # subject-level mixture likelihood (marginal over z)
+    # PyMC has DirichletMultinomial: pm.DirichletMultinomial
+    like1 = pm.DirichletMultinomial.dist(a=alpha1, n=counts.sum(axis=1))
+    like2 = pm.DirichletMultinomial.dist(a=alpha2, n=counts.sum(axis=1))
+    like3 = pm.DirichletMultinomial.dist(a=alpha3, n=counts.sum(axis=1))
+
+    # mixture across subjects
+    pm.Mixture('x', w, comp_dists=[like1, like2, like3], observed=counts)
+
+    mixture_trace_3 = pm.sample(2000, tune=2000, target_accept=0.9, idata_kwargs={"log_likelihood": True})
+    loo_mixture_3 = az.loo(mixture_trace_3)
 
 
 
@@ -119,7 +165,8 @@ with pm.Model() as mixture_model:
 
 az.compare({
     "hybrid": hybrid_trace,
-    "mixture": mixture_trace
+    "mixture": mixture_trace,
+    "mixture_3": mixture_trace_3
 })
 
 # %%

@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import warnings
 from groupBMC.groupBMC import GroupBMC
 
-np.set_printoptions(suppress=True,precision=3)
+np.set_printoptions(suppress=True, precision=3)
 
 
 #%% [code]
