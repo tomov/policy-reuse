@@ -36,11 +36,18 @@ counts = data['counts']
 
 # SYNTHETIC DATA for model recoverability
 synthetic_hybrid_counts = np.tile(np.array([10, 5, 5, 1, 1, 4]), (30, 1))
+
 synthetic_mixture_counts = np.vstack([
     np.tile(np.array([20, 1, 1, 1, 1, 4]), (15, 1)),
     np.tile(np.array([2, 10, 10, 1, 1, 4]), (15, 1))
 ])
-#counts = synthetic_mixture_counts
+
+synthetic_mixture_3_counts = np.vstack([
+    np.tile(np.array([20, 1, 1, 1, 1, 4]), (10, 1)),
+    np.tile(np.array([2, 10, 10, 1, 1, 4]), (10, 1)),
+    np.tile(np.array([1, 1, 1, 1, 20, 4]), (10, 1))
+])
+#counts = synthetic_mixture_3_counts
 
 S, K = counts.shape
 N = counts.sum(axis=1)
