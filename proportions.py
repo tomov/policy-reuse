@@ -82,7 +82,7 @@ plt.grid(axis='y', alpha=0.3)
 plt.tight_layout()
 
 # Save the plot
-plt.savefig('proportions_plot.png', dpi=150, bbox_inches='tight')
+plt.savefig('plots/proportions.png', dpi=150, bbox_inches='tight')
 plt.show()
 
 # %%

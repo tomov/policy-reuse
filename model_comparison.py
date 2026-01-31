@@ -1,6 +1,8 @@
 #%% [markdown]
 # ## Preliminaries
 
+# Whether to include hybrid hypotheses (i.e. within-subject mixtures) in the analysis
+include_hybrids = True
 
 #%% [code]
 # Includes
@@ -89,7 +91,7 @@ class Parameter:
 class Hypothesis:
     """ Simple hypothesis about the multinomial distribution parameters """
     
-    def __init__(self, name: str, parameters: list[Parameter]):
+    def __init__(self, name: str, parameters: list[Parameter], is_hybrid: bool = False):
         """
         :param name: the name of the hypothesis
         :param parameters: the parameters that the hypothesis encompasses
@@ -100,6 +102,7 @@ class Hypothesis:
         self.noise_parameter = None
         self.log_likelihood = None
         self.bic = None
+        self.is_hybrid = is_hybrid
         
     def get_noise_parameter(self) -> Parameter:
         """Get the noise parameter for the hypothesis"""
@@ -176,14 +179,19 @@ H7 = Hypothesis("GPI zero",
 H8 = Hypothesis("GPI zero + Policy reuse cued", 
                 [Parameter('p', ['gpi zero'], (1/9, 1)),
                  Parameter('q', ['policy reuse max rew. test'], (1/9, 1)), 
-                 Parameter('r', ['policy reuse min rew. test'], (1/9, 1))])
+                 Parameter('r', ['policy reuse min rew. test'], (1/9, 1))],
+                is_hybrid=True)
 
 # H9: [p,q,q,e,e,4e]
 H9 = Hypothesis("GPI zero + Policy reuse cued uniform", 
                 [Parameter('p', ['gpi zero'], (1/9, 1)),
-                 Parameter('q', ['policy reuse max rew. test', 'policy reuse min rew. test'], (1/9, 1))])
+                 Parameter('q', ['policy reuse max rew. test', 'policy reuse min rew. test'], (1/9, 1))],
+                is_hybrid=True)
 
-hypotheses = [H0, H1, H2, H3, H4, H5, H6, H7, H8, H9]
+all_hypotheses = [H0, H1, H2, H3, H4, H5, H6, H7, H8, H9]
+
+# Potentially exclude hybrid hypotheses
+hypotheses = [H for H in all_hypotheses if include_hybrids or not H.is_hybrid]
 
 # %% [code]
 # Fit the hypotheses
@@ -220,6 +228,8 @@ def plot_model_comparison(data, metric_name, hypotheses):
     
     # Adjust layout to prevent label cutoff
     plt.tight_layout()
+
+    plt.savefig(f'plots/model_comparison_{metric_name}.png', dpi=150, bbox_inches='tight')
     plt.show()
 
 plot_model_comparison(bics, 'BIC', hypotheses)
@@ -245,7 +255,11 @@ print('-' * 50)
 # Group BMC with families
 
 lmes = -0.5 * bics
-bms_fam = GroupBMC(lmes.transpose(), partitions=[[1],[2,3,4,5,6],[7],[8],[9,10]])
+if include_hybrids:
+    partitions = [[1],[2,3,4,5,6],[7],[8],[9,10]]
+else:
+    partitions = [[1],[2,3,4,5,6],[7],[8]]
+bms_fam = GroupBMC(lmes.transpose(), partitions=partitions)
 bms_result_fam = bms_fam.get_result()
 
 family_names = [
@@ -253,8 +267,9 @@ family_names = [
     'Policy reuse family (H1-H5)',
     'MB/GPI (H6)',
     'GPI zero (H7)',
-    'GPI zero + Policy reuse (H8-H9)'
 ]
+if include_hybrids:
+    family_names.append('GPI zero + Policy reuse (H8-H9)')
 
 print('\nBMS Family Protected Exceedance Probability:')
 print('-' * 50)
