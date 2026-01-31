@@ -98,7 +98,7 @@ print("Responsibilities:", r)
 
 counts = df_counts.to_numpy()
 S, K = counts.shape
-cluster_range = range(1, 10)
+cluster_range = range(1, 20)
 
 results = {}
 for C in cluster_range:
@@ -184,7 +184,6 @@ bics = [results[C]['bic'] for C in cluster_range]
 aics = [results[C]['aic'] for C in cluster_range]
 
 print("BIC-optimal clusters (aggregate):", list(cluster_range)[np.argmin(bics)])
-print("BIC-optimal clusters (per-subject mean):", list(cluster_range)[np.argmin(np.mean(bics_per_subject, axis=0))])
 print("AIC-optimal clusters:", list(cluster_range)[np.argmin(aics)])
 
 #%% [code]
@@ -192,7 +191,7 @@ print("AIC-optimal clusters:", list(cluster_range)[np.argmin(aics)])
 
 from sklearn.model_selection import KFold
 
-n_folds = 5
+n_folds = S
 cv_ll = {C: [] for C in cluster_range}
 
 kf = KFold(n_splits=n_folds, shuffle=True, random_state=0)
@@ -205,13 +204,15 @@ for train_idx, test_idx in kf.split(counts):
         cv_ll[C].append(logsumexp(loglik_test, axis=1).sum())
 
 mean_cv_ll = [np.mean(cv_ll[C]) for C in cluster_range]
+sem_cv_ll = [np.std(cv_ll[C]) / np.sqrt(len(cv_ll[C])) for C in cluster_range]
 print("CV-optimal clusters:", list(cluster_range)[np.argmax(mean_cv_ll)])
 
 plt.figure()
-plt.errorbar(list(cluster_range), mean_cv_ll, yerr=[np.std(cv_ll[C]) for C in cluster_range], fmt='o-')
+plt.errorbar(list(cluster_range), mean_cv_ll, yerr=sem_cv_ll, fmt='o-')
 plt.xlabel('Number of clusters')
 plt.ylabel('Held-out log-likelihood')
 plt.title('Cross-validation')
+plt.savefig(f'plots/em_clusters_cv.png', dpi=150, bbox_inches='tight')
 plt.show()
 
 #%% [code]
@@ -224,6 +225,7 @@ plt.plot(list(cluster_range), lls, 'o-')
 plt.xlabel('Number of clusters')
 plt.ylabel('Log-likelihood')
 plt.title('Elbow plot')
+plt.savefig(f'plots/em_clusters_elbow.png', dpi=150, bbox_inches='tight')
 plt.show()
 
 #%% [code]
