@@ -2,7 +2,7 @@
 # ## Preliminaries
 
 # Whether to include hybrid hypotheses (i.e. within-subject mixtures) in the analysis
-include_hybrids = True
+include_hybrids = False
 
 #%% [code]
 # Includes
