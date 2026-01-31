@@ -28,6 +28,25 @@ df_counts = data['df_counts']
 #%% [code]
 # Multinomial mixture EM algorithm
 
+def compute_cluster_loglikelihood(pi_j, theta_j, counts):
+    """Compute log-likelihood for a single cluster.
+    
+    The probability is computed as:
+    P(data | cluster j) = π_j * ∏_k (θ_j[k])^(counts[k])
+    
+    In log space:
+    log P(data | cluster j) = log(π_j) + Σ_k counts[k] * log(θ_j[k])
+    
+    Args:
+        pi_j: Cluster probability (scalar)
+        theta_j: Cluster parameters (1D array)
+        counts: Count data (2D array: subjects x categories)
+    
+    Returns:
+        1D array of log-likelihoods for each subject
+    """
+    return np.log(pi_j) + (counts * np.log(theta_j + 1e-12)).sum(axis=1)
+
 def multinomial_mixture_EM(counts, n_clusters=2, max_iter=200, tol=1e-6, seed=0):
     rng = np.random.default_rng(seed)
     S, K = counts.shape
@@ -40,10 +59,8 @@ def multinomial_mixture_EM(counts, n_clusters=2, max_iter=200, tol=1e-6, seed=0)
         # --- E-step ---
         loglik = np.zeros((S, n_clusters))
         for j in range(n_clusters):
-            loglik[:, j] = np.log(pi[j]) + (counts * np.log(theta[j] + 1e-12)).sum(axis=1)
-        loglik -= loglik.max(axis=1, keepdims=True)  # stability
-        r = np.exp(loglik)
-        r /= r.sum(axis=1, keepdims=True)
+            loglik[:, j] = compute_cluster_loglikelihood(pi[j], theta[j], counts)
+        r = np.exp(loglik - logsumexp(loglik, axis=1, keepdims=True))
 
         # --- M-step ---
         pi_new = r.mean(axis=0)
@@ -62,16 +79,15 @@ def multinomial_mixture_EM(counts, n_clusters=2, max_iter=200, tol=1e-6, seed=0)
     # compute total log-likelihood
     loglik_final = np.zeros((S, n_clusters))
     for j in range(n_clusters):
-        loglik_final[:, j] = np.log(pi[j]) + (counts * np.log(theta[j] + 1e-12)).sum(axis=1)
-    max_ll = loglik_final.max(axis=1, keepdims=True)
-    ll = np.sum(max_ll.ravel() + np.log(np.exp(loglik_final - max_ll).sum(axis=1)))
+        loglik_final[:, j] = compute_cluster_loglikelihood(pi[j], theta[j], counts)
+    ll = logsumexp(loglik_final, axis=1).sum()
 
     return pi, theta, r, ll
 
 #%% [code]
 # Run the EM algorithm
 
-pi, theta, r, ll = multinomial_mixture_EM(df_counts.to_numpy(), n_clusters=4)
+pi, theta, r, ll = multinomial_mixture_EM(df_counts.to_numpy(), n_clusters=1)
 
 print("Cluster probabilities:", pi)
 print("Cluster means:", theta)
@@ -92,8 +108,71 @@ for C in cluster_range:
     results[C] = {'pi': pi_c, 'theta': theta_c, 'r': r_c, 'll': ll_c, 'n_params': n_params}
 
 #%% [code]
-# Method 1: BIC / AIC for WHOLE DATASET
+# Method 1: Bayesian model comparison (GroupBMC)
 
+def plot_model_comparison(data, metric_name, cluster_range):
+    """Plot bar chart with error bars for model comparison metrics"""
+    means = np.mean(data, axis=0)
+    sems = np.std(data, axis=0) / np.sqrt(data.shape[0])
+    
+    # Create the bar plot
+    plt.figure(figsize=(10, 6))
+    bars = plt.bar(range(len(cluster_range)), means, yerr=sems, 
+                   capsize=5, alpha=0.7, color='steelblue')
+    
+    # Customize the plot
+    plt.xlabel('Number of clusters')
+    plt.ylabel(metric_name)
+    plt.title('Model comparison')
+    plt.xticks(range(len(cluster_range)), list(cluster_range))
+    plt.grid(axis='y', alpha=0.3)
+    plt.ylim(bottom=means.min() - 2*sems.max(), top=means.max() + 2*sems.max())
+    
+    # Adjust layout to prevent label cutoff
+    plt.tight_layout()
+    plt.savefig(f'plots/em_clusters_bms_{metric_name}.png', dpi=150, bbox_inches='tight')
+
+    plt.show()
+
+# approximate per-subject log model evidence using BIC_i = ll_i - (k/2) * log(N_i)
+n_models = len(cluster_range)
+logliks = np.zeros((S, n_models))
+bics = np.zeros((S, n_models))  # subjects x models
+
+for idx, C in enumerate(cluster_range):
+    res = results[C]
+    pi_c, theta_c = res['pi'], res['theta']
+    n_params = res['n_params']
+    loglik_s = np.zeros((S, C))
+    for j in range(C):
+        loglik_s[:, j] = compute_cluster_loglikelihood(pi_c[j], theta_c[j], counts)
+    logliks[:, idx] = logsumexp(loglik_s, axis=1)
+    N_per_subject = counts.sum(axis=1)
+    bics[:, idx] = n_params * np.log(N_per_subject) - 2 * logliks[:, idx] 
+
+lmes = -0.5 * bics
+gbmc = GroupBMC(lmes.transpose())
+gbmc_result = gbmc.get_result()
+print("GroupBMC exceedance probabilities:", gbmc_result.protected_exceedance_probability)
+
+
+plot_model_comparison(logliks, 'Log-likelihood', cluster_range)
+plot_model_comparison(bics, 'BIC', cluster_range)
+
+#%% [code]
+# Method 2: BIC / AIC for WHOLE DATASET
+
+for idx, C in enumerate(cluster_range):
+    res = results[C]
+    pi_c, theta_c = res['pi'], res['theta']
+    n_params = res['n_params']
+    loglik_s = np.zeros((S, C))
+    for j in range(C):
+        loglik_s[:, j] = compute_cluster_loglikelihood(pi_c[j], theta_c[j], counts)
+    ll_per_subject = logsumexp(loglik_s, axis=1)
+    N_per_subject = counts.sum(axis=1)
+
+# Also compute aggregate BIC for comparison
 for C in cluster_range:
     res = results[C]
     bic = -2 * res['ll'] + res['n_params'] * np.log(S)
@@ -104,46 +183,9 @@ for C in cluster_range:
 bics = [results[C]['bic'] for C in cluster_range]
 aics = [results[C]['aic'] for C in cluster_range]
 
-print("BIC-optimal clusters:", list(cluster_range)[np.argmin(bics)])
+print("BIC-optimal clusters (aggregate):", list(cluster_range)[np.argmin(bics)])
+print("BIC-optimal clusters (per-subject mean):", list(cluster_range)[np.argmin(np.mean(bics_per_subject, axis=0))])
 print("AIC-optimal clusters:", list(cluster_range)[np.argmin(aics)])
-
-plt.figure()
-plt.plot(list(cluster_range), bics, 'o-', label='BIC')
-plt.plot(list(cluster_range), aics, 's-', label='AIC')
-plt.xlabel('Number of clusters')
-plt.ylabel('Score')
-plt.title('BIC / AIC for entire dataset (i.e. one penalty for all subjects)')
-plt.legend()
-plt.show()
-
-#%% [code]
-# Method 2: Bayesian model comparison (GroupBMC)
-
-# approximate per-subject log model evidence using BIC_i = ll_i - (k/2) * log(N_i)
-n_models = len(cluster_range)
-lme_matrix = np.zeros((S, n_models))  # subjects x models
-
-for idx, C in enumerate(cluster_range):
-    res = results[C]
-    pi_c, theta_c = res['pi'], res['theta']
-    n_params = res['n_params']
-    loglik_s = np.zeros((S, C))
-    for j in range(C):
-        loglik_s[:, j] = np.log(pi_c[j]) + (counts * np.log(theta_c[j] + 1e-12)).sum(axis=1)
-    ll_per_subject = logsumexp(loglik_s, axis=1)
-    N_per_subject = counts.sum(axis=1)
-    lme_matrix[:, idx] = ll_per_subject - (n_params / 2) * np.log(N_per_subject)
-
-gbmc = GroupBMC(lme_matrix.transpose())
-gbmc_result = gbmc.get_result()
-print("GroupBMC exceedance probabilities:", gbmc_result.protected_exceedance_probability)
-
-plt.figure()
-plt.bar(list(cluster_range), gbmc_result.protected_exceedance_probability)
-plt.xlabel('Number of clusters')
-plt.ylabel('Exceedance probability')
-plt.title('Bayesian Model Comparison (i.e. one penalty for each subject)')
-plt.show()
 
 #%% [code]
 # Method 3: Cross-validation
@@ -159,7 +201,7 @@ for train_idx, test_idx in kf.split(counts):
         pi_c, theta_c, _, _ = multinomial_mixture_EM(counts[train_idx], n_clusters=C)
         loglik_test = np.zeros((len(test_idx), C))
         for j in range(C):
-            loglik_test[:, j] = np.log(pi_c[j]) + (counts[test_idx] * np.log(theta_c[j] + 1e-12)).sum(axis=1)
+            loglik_test[:, j] = compute_cluster_loglikelihood(pi_c[j], theta_c[j], counts[test_idx])
         cv_ll[C].append(logsumexp(loglik_test, axis=1).sum())
 
 mean_cv_ll = [np.mean(cv_ll[C]) for C in cluster_range]
