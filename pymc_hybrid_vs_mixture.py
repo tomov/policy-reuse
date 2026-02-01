@@ -25,9 +25,11 @@ np.set_printoptions(suppress=True,precision=3)
 #%% [code]
 # Load data
 
-from load_data import load_data
+from load_data import load_data_for_experiment
 
-data = load_data()
+experiment_version = "V0.3_pilot"
+
+data = load_data_for_experiment(experiment_version)
 counts = data['counts']
 
 
