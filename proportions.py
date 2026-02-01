@@ -16,9 +16,9 @@ np.set_printoptions(suppress=True, precision=3)
 #%% [code]
 # Load data
 
-from load_data import load_full_data
+from load_data import load_full_data_for_experiment
 
-data = load_full_data()
+data = load_full_data_for_experiment()
 df_counts = data['df_counts']
 df_num_options = data['df_num_options']
 choice_columns = data['choice_columns']
