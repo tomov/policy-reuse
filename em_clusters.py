@@ -89,6 +89,7 @@ def multinomial_mixture_EM(counts, n_clusters=2, max_iter=200, tol=1e-6, seed=0)
 
 pi, theta, r, ll = multinomial_mixture_EM(df_counts.to_numpy(), n_clusters=3)
 
+print('Choice categories: ', data['choice_columns'])
 print("Cluster probabilities:", pi)
 print("Cluster means:", theta)
 print("Responsibilities:", r)
