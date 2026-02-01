@@ -1,10 +1,11 @@
 #%% [markdown]
 # ## Preliminaries
 
+#%% [code]
 # Whether to include hybrid hypotheses (i.e. within-subject mixtures) in the analysis
 include_hybrids = True
 
-experiment_version = "V0.3_pilot"
+experiment_version = "V0.4_pilot"
 
 #%% [code]
 # Includes
