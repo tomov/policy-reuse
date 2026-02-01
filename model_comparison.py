@@ -2,7 +2,9 @@
 # ## Preliminaries
 
 # Whether to include hybrid hypotheses (i.e. within-subject mixtures) in the analysis
-include_hybrids = False
+include_hybrids = True
+
+experiment_version = "V0.3_pilot"
 
 #%% [code]
 # Includes
@@ -21,9 +23,9 @@ np.set_printoptions(suppress=True, precision=3, linewidth=120)
 #%% [code]
 # Load data
 
-from load_data import load_data
+from load_data import load_data_for_experiment
 
-data = load_data()
+data = load_data_for_experiment(experiment_version)
 df_counts = data['df_counts']
 df_num_options = data['df_num_options']
 choice_columns = data['choice_columns']
@@ -229,7 +231,7 @@ def plot_model_comparison(data, metric_name, hypotheses):
     # Adjust layout to prevent label cutoff
     plt.tight_layout()
 
-    plt.savefig(f'plots/model_comparison_{metric_name}.png', dpi=150, bbox_inches='tight')
+    plt.savefig(f'results/{experiment_version}/model_comparison_{metric_name}.png', dpi=150, bbox_inches='tight')
     plt.show()
 
 plot_model_comparison(bics, 'BIC', hypotheses)

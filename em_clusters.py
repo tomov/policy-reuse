@@ -20,9 +20,11 @@ np.set_printoptions(suppress=True, precision=3)
 #%% [code]
 # Load data
 
-from load_data import load_data
+from load_data import load_data_for_experiment
 
-data = load_data()
+experiment_version = "V0.3_pilot"
+
+data = load_data_for_experiment(experiment_version)
 df_counts = data['df_counts']
 
 #%% [code]
@@ -119,7 +121,7 @@ plt.plot(list(cluster_range), lls, 'o-')
 plt.xlabel('Number of clusters')
 plt.ylabel('Log-likelihood')
 plt.title('Elbow plot')
-plt.savefig(f'plots/em_clusters_elbow.png', dpi=150, bbox_inches='tight')
+plt.savefig(f'results/{experiment_version}/em_clusters_elbow.png', dpi=150, bbox_inches='tight')
 plt.show()
 
 #%% [code]
@@ -147,7 +149,7 @@ plt.errorbar(list(cluster_range), mean_cv_ll, yerr=sem_cv_ll, fmt='o-')
 plt.xlabel('Number of clusters')
 plt.ylabel('Held-out log-likelihood')
 plt.title('Cross-validation')
-plt.savefig(f'plots/em_clusters_cv.png', dpi=150, bbox_inches='tight')
+plt.savefig(f'results/{experiment_version}/em_clusters_cv.png', dpi=150, bbox_inches='tight')
 plt.show()
 
 #%% [code]
@@ -168,7 +170,7 @@ plt.ylabel('CV Log-likelihood')
 plt.title('CV with knee detection')
 plt.legend()
 plt.tight_layout()
-plt.savefig('plots/em_clusters_knee.png', dpi=150, bbox_inches='tight')
+plt.savefig(f'results/{experiment_version}/em_clusters_knee.png', dpi=150, bbox_inches='tight')
 plt.show()
 
 #%% [code]
@@ -201,13 +203,29 @@ plt.xlabel('Number of clusters (k)')
 plt.ylabel('% improvement')
 plt.title('Relative improvement in log-likelihood')
 plt.tight_layout()
-plt.savefig('plots/em_clusters_marginal_gain.png', dpi=150, bbox_inches='tight')
+plt.savefig(f'results/{experiment_version}/em_clusters_marginal_gain.png', dpi=150, bbox_inches='tight')
 plt.show()
 
 #%% [code]
 # Method 4: Paired t-tests between adjacent models (using per-subject log-likelihoods)
 
 from scipy import stats
+
+# approximate per-subject log model evidence using BIC_i = ll_i - (k/2) * log(N_i)
+n_models = len(cluster_range)
+logliks = np.zeros((S, n_models))
+bics = np.zeros((S, n_models))  # subjects x models
+
+for idx, C in enumerate(cluster_range):
+    res = results[C]
+    pi_c, theta_c = res['pi'], res['theta']
+    n_params = res['n_params']
+    loglik_s = np.zeros((S, C))
+    for j in range(C):
+        loglik_s[:, j] = compute_cluster_loglikelihood(pi_c[j], theta_c[j], counts)
+    logliks[:, idx] = logsumexp(loglik_s, axis=1)
+    N_per_subject = counts.sum(axis=1)
+    bics[:, idx] = n_params * np.log(N_per_subject) - 2 * logliks[:, idx] 
 
 print("\nPaired t-tests (k vs k+1 clusters):")
 print("-" * 60)
