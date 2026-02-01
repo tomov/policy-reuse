@@ -18,7 +18,9 @@ np.set_printoptions(suppress=True, precision=3)
 
 from load_data import load_full_data_for_experiment
 
-data = load_full_data_for_experiment()
+experiment_version = "V0.3_pilot"
+
+data = load_full_data_for_experiment(experiment_version)
 df_counts = data['df_counts']
 df_num_options = data['df_num_options']
 choice_columns = data['choice_columns']
@@ -82,7 +84,7 @@ plt.grid(axis='y', alpha=0.3)
 plt.tight_layout()
 
 # Save the plot
-plt.savefig('plots/proportions.png', dpi=150, bbox_inches='tight')
+plt.savefig(f'results/{experiment_version}/proportions.png', dpi=150, bbox_inches='tight')
 plt.show()
 
 # %%
