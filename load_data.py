@@ -10,13 +10,21 @@ UNIQUE_CHOICE_COLUMNS = ['gpi zero',
                           'mb/gpi', 
                           'null trajectories']
 
-def load_data_for_experiment(experiment_version: str = "V0.3_pilot"):
+UNIQUE_CHOICE_COLUMNS_NO_UNCUED = [
+    'gpi zero',
+    'policy reuse max rew. test',
+    'policy reuse min rew. test',
+    'mb/gpi',
+    'null trajectories'
+]
+
+def load_data_for_experiment(experiment_version: str = "V0.3_pilot", choice_columns: list[str] = UNIQUE_CHOICE_COLUMNS):
     file_path = os.path.join("data", experiment_version, "summary_subject_x_choice_counts.csv")
     num_options_path = os.path.join("data", experiment_version, "summary_n_valid_trajectories_per_hypothesis.csv")
-    return load_data(file_path, num_options_path)
+    return load_data(file_path, num_options_path, choice_columns=choice_columns)
 
-def load_data_for_experiments(experiment_versions: list[str]):
-    all_data = [load_data_for_experiment(version) for version in experiment_versions]
+def load_data_for_experiments(experiment_versions: list[str], choice_columns: list[str] = UNIQUE_CHOICE_COLUMNS):
+    all_data = [load_data_for_experiment(version, choice_columns=choice_columns) for version in experiment_versions]
     return {
         'df_all': pd.concat([d['df_all'] for d in all_data], ignore_index=True),
         'df_counts': pd.concat([d['df_counts'] for d in all_data], ignore_index=True),
@@ -43,10 +51,9 @@ def load_full_data_for_experiments(experiment_versions: list[str]):
     }
 
 def load_data(
-    file_path="data/summary_subject_x_choice_counts.csv",
-    num_options_path="data/summary_n_valid_trajectories_per_hypothesis.csv",
-    choice_columns=UNIQUE_CHOICE_COLUMNS
-):
+    file_path: str,
+    num_options_path: str, 
+    choice_columns: list[str] | None):
     df_all = pd.read_csv(file_path, dtype='int64')
     
     # Create the new column first, then filter
@@ -86,7 +93,8 @@ def load_data(
 
     # Check that all rows sum to the number of test trials
     n_test_trials = int(df_all['random choice'].iloc[0])
-    assert all(df_counts[UNIQUE_CHOICE_COLUMNS].sum(axis=1) == n_test_trials), f"Not all rows sum to {n_test_trials}"
+    unique_cols = [c for c in UNIQUE_CHOICE_COLUMNS if c in df_all.columns]
+    assert all(df_counts[unique_cols].sum(axis=1) == n_test_trials), f"Not all rows sum to {n_test_trials}"
     
     return {
         'df_all': df_all,
