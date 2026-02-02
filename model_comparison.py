@@ -5,7 +5,6 @@
 # Whether to include hybrid hypotheses (i.e. within-subject mixtures) in the analysis
 include_hybrids = True
 
-experiment_version = "V0.4_pilot"
 
 #%% [code]
 # Includes
@@ -24,12 +23,19 @@ np.set_printoptions(suppress=True, precision=3, linewidth=120)
 #%% [code]
 # Load data
 
-from load_data import load_data_for_experiment
+from load_data import load_data_for_experiment, load_data_for_experiments
 
-data = load_data_for_experiment(experiment_version)
+#experiment_version = "V0.4_pilot"
+#data = load_data_for_experiment(experiment_version)
+
+experiment_versions = ["V0.3_pilot", "V1.0_pilot", "V1.1_pilot"]
+experiment_version = "V0.3_1.0_1.1_pilot"
+data = load_data_for_experiments(experiment_versions)
+
 df_counts = data['df_counts']
 df_num_options = data['df_num_options']
 choice_columns = data['choice_columns']
+
 
 
 # %% [code]

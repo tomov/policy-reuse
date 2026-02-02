@@ -25,13 +25,14 @@ np.set_printoptions(suppress=True,precision=3)
 #%% [code]
 # Load data
 
-from load_data import load_data_for_experiments
+from load_data import load_data_for_experiments, load_data_for_experiment
 
 experiment_version = "V0.4_pilot"
-#experiment_versions = ["V0.3_pilot", "V1.0_pilot", "V1.1_pilot"]
-
 data = load_data_for_experiment(experiment_version)
+
+#experiment_versions = ["V0.3_pilot", "V1.0_pilot", "V1.1_pilot"]
 #data = load_data_for_experiments(experiment_versions)
+
 counts = data['counts']
 
 
@@ -62,7 +63,6 @@ synthetic_mixture_4_counts = np.vstack([
 
 S, K = counts.shape
 N = counts.sum(axis=1)
-
 
 #%% [code]
 # Hybrid model: GPI zero + Policy reuse cued
