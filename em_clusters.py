@@ -25,12 +25,12 @@ from load_data import load_data_for_experiment, UNIQUE_CHOICE_COLUMNS_NO_UNCUED,
 #experiment_version = "V1.2_pilot"
 #data = load_data_for_experiment(experiment_version, choice_columns=UNIQUE_CHOICE_COLUMNS_NO_UNCUED)
 
-#experiment_version = "V0.3_pilot"
-#data = load_data_for_experiment(experiment_version)
+experiment_version = "V0.3_pilot"
+data = load_data_for_experiment(experiment_version)
 
-experiment_versions = ["V0.3_pilot", "V1.0_pilot", "V1.1_pilot"]
-experiment_version = "V0.3_1.0_1.1_pilot"
-data = load_data_for_experiments(experiment_versions)
+#experiment_versions = ["V0.3_pilot", "V1.0_pilot", "V1.1_pilot"]
+#experiment_version = "V0.3_1.0_1.1_pilot"
+#data = load_data_for_experiments(experiment_versions)
 
 df_counts = data['df_counts']
 
