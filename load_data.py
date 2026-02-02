@@ -18,9 +18,12 @@ UNIQUE_CHOICE_COLUMNS_NO_UNCUED = [
     'null trajectories'
 ]
 
+DATA_DIR_TEMPLATE = "/home/momchil.tomov/Documents/policy-composition/Output/{experiment_version}/files/summaries/"
+
 def load_data_for_experiment(experiment_version: str = "V0.3_pilot", choice_columns: list[str] = UNIQUE_CHOICE_COLUMNS):
-    file_path = os.path.join("data", experiment_version, "summary_subject_x_choice_counts.csv")
-    num_options_path = os.path.join("data", experiment_version, "summary_n_valid_trajectories_per_hypothesis.csv")
+    data_dir = DATA_DIR_TEMPLATE.format(experiment_version=experiment_version)
+    file_path = os.path.join(data_dir, "summary_subject_x_choice_counts.csv")
+    num_options_path = os.path.join(data_dir, "summary_n_valid_trajectories_per_hypothesis.csv")
     return load_data(file_path, num_options_path, choice_columns=choice_columns)
 
 def load_data_for_experiments(experiment_versions: list[str], choice_columns: list[str] = UNIQUE_CHOICE_COLUMNS):
@@ -35,8 +38,9 @@ def load_data_for_experiments(experiment_versions: list[str], choice_columns: li
     }
 
 def load_full_data_for_experiment(experiment_version: str = "V0.3_pilot"):
-    file_path = os.path.join("data", experiment_version, "summary_subject_x_choice_counts.csv")
-    num_options_path = os.path.join("data", experiment_version, "summary_n_valid_trajectories_per_hypothesis.csv")
+    data_dir = DATA_DIR_TEMPLATE.format(experiment_version=experiment_version)
+    file_path = os.path.join(data_dir, "summary_subject_x_choice_counts.csv")
+    num_options_path = os.path.join(data_dir, "summary_n_valid_trajectories_per_hypothesis.csv")
     return load_data(file_path, num_options_path, choice_columns=None)
 
 def load_full_data_for_experiments(experiment_versions: list[str]):
