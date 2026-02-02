@@ -21,6 +21,7 @@ from load_data import load_full_data_for_experiment
 experiment_version = "V0.4_pilot"
 
 data = load_full_data_for_experiment(experiment_version)
+
 df_counts = data['df_counts']
 df_num_options = data['df_num_options']
 choice_columns = data['choice_columns']
