@@ -15,6 +15,17 @@ def load_data_for_experiment(experiment_version: str = "V0.3_pilot"):
     num_options_path = os.path.join("data", experiment_version, "summary_n_valid_trajectories_per_hypothesis.csv")
     return load_data(file_path, num_options_path)
 
+def load_data_for_experiments(experiment_versions: list[str]):
+    all_data = [load_data_for_experiment(version) for version in experiment_versions]
+    return {
+        'df_all': pd.concat([d['df_all'] for d in all_data], ignore_index=True),
+        'df_counts': pd.concat([d['df_counts'] for d in all_data], ignore_index=True),
+        'df_num_options': pd.concat([d['df_num_options'] for d in all_data], ignore_index=True),
+        'choice_columns': all_data[0]['choice_columns'],
+        'num_options': all_data[0]['num_options'],
+        'counts': np.vstack([d['counts'] for d in all_data])
+    }
+
 def load_full_data_for_experiment(experiment_version: str = "V0.3_pilot"):
     file_path = os.path.join("data", experiment_version, "summary_subject_x_choice_counts.csv")
     num_options_path = os.path.join("data", experiment_version, "summary_n_valid_trajectories_per_hypothesis.csv")
