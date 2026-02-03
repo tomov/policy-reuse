@@ -23,7 +23,7 @@ plt.rcParams['figure.dpi'] = 150
 from load_data import load_data_for_experiment, UNIQUE_CHOICE_COLUMNS_NO_UNCUED
 
 # Use same experiment version as em_clusters.py
-experiment_version = "V0.3_pilot"
+experiment_version = "V1.1_pilot"
 data = load_data_for_experiment(experiment_version)
 
 df_counts = data['df_counts']

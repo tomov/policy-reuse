@@ -171,18 +171,74 @@ for logodds_col in logodds_columns:
         print(f"  {name:30s}: {coef:+.4f}{marker}")
 
 #%% [code]
-# Plots: dependent vs. most relevant independent variables (from Lasso)
+# Plots: bar plots with mean +/- SEM for top predictors
 
 import matplotlib.pyplot as plt
 from scipy import stats as scipy_stats
-from itertools import combinations
 
-# For each log-odds contrast, pick the top non-zero Lasso predictors
-N_TOP = 3  # number of top predictors to plot per contrast
+N_TOP = 5  # number of top predictors to plot per contrast
+
+# Bonferroni correction: n_contrasts * n_predictors (excluding intercept)
+n_predictors = len(results[logodds_columns[0]].pvalues) - 1  # exclude Intercept
+n_contrasts = len(logodds_columns)
+n_tests = n_predictors * n_contrasts
+ALPHA = 0.05 / n_tests
+print(f"Bonferroni correction: {n_tests} tests, alpha = {ALPHA:.5f}")
+
+def make_bar_plot(ax, df, logodds_col, orig_col, inset_text):
+    """Helper to draw a bar plot with mean +/- SEM for a single predictor."""
+    x_vals = df[orig_col]
+    y_vals = df[logodds_col]
+    groups = sorted(x_vals.unique())
+    means = [y_vals[x_vals == g].mean() for g in groups]
+    sems = [y_vals[x_vals == g].std() / np.sqrt((x_vals == g).sum()) for g in groups]
+    x_pos = np.arange(len(groups))
+    ax.bar(x_pos, means, yerr=sems, capsize=4, color='steelblue', alpha=0.7, edgecolor='black')
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels([str(g) for g in groups])
+    ax.set_xlabel(orig_col)
+    ax.axhline(0, color='gray', linewidth=0.5, linestyle='--')
+
+    # Pairwise t-tests between adjacent and skip-1 bars
+    y_max = max(m + s for m, s in zip(means, sems))
+    y_min = min(m - s for m, s in zip(means, sems))
+    bracket_h = (y_max - y_min) * 0.08
+    pairs = [(i, i + 1) for i in range(len(groups) - 1)]
+    pairs += [(i, i + 2) for i in range(len(groups) - 2)]
+    for level, (i, j) in enumerate(pairs):
+        g1, g2 = groups[i], groups[j]
+        vals1 = y_vals[x_vals == g1].values
+        vals2 = y_vals[x_vals == g2].values
+        _, p_val = scipy_stats.ttest_ind(vals1, vals2)
+        if p_val >= 0.05:
+            label = "n.s."
+        elif p_val < 0.001:
+            label = "***"
+        elif p_val < 0.01:
+            label = "**"
+        else:
+            label = "*"
+        y_bracket = y_max + bracket_h * (1 + level * 2.5)
+        ax.plot([x_pos[i], x_pos[i], x_pos[j], x_pos[j]],
+                [y_bracket - bracket_h * 0.3, y_bracket, y_bracket, y_bracket - bracket_h * 0.3],
+                color='black', linewidth=0.8)
+        ax.text((x_pos[i] + x_pos[j]) / 2, y_bracket, label,
+                ha='center', va='bottom', fontsize=8)
+
+    # Inset text
+    ax.text(0.95, 0.95, inset_text,
+            transform=ax.transAxes, ha='right', va='top', fontsize=8,
+            bbox=dict(boxstyle='round,pad=0.3', facecolor='wheat', alpha=0.8))
+
+    short_label = logodds_col.replace("logodds_", "log-odds: ").replace("_vs_", " / ").replace("_", " ")
+    ax.set_ylabel(short_label)
+    ax.set_title(f"{orig_col}")
+
+#%% [code]
+# --- LassoCV plots ---
 
 for logodds_col in logodds_columns:
     lasso = lasso_results[logodds_col]
-    # Sort by absolute coefficient, keep non-zero
     coef_pairs = [(name, coef) for name, coef in zip(feature_names, lasso.coef_) if coef != 0]
     coef_pairs.sort(key=lambda x: -abs(x[1]))
     top_predictors = coef_pairs[:N_TOP]
@@ -190,66 +246,60 @@ for logodds_col in logodds_columns:
     if not top_predictors:
         continue
 
+    short_label = logodds_col.replace("logodds_", "log-odds: ").replace("_vs_", " / ").replace("_", " ")
     n_plots = len(top_predictors)
     fig, axes = plt.subplots(1, n_plots, figsize=(5 * n_plots, 4))
     if n_plots == 1:
         axes = [axes]
 
-    # Short label for y-axis
-    short_label = logodds_col.replace("logodds_", "log-odds: ").replace("_vs_", " / ").replace("_", " ")
-
     for ax, (pred_name, pred_coef) in zip(axes, top_predictors):
-        # Map dummy name back to original column
         orig_col = "design_type" if pred_name.startswith("design_type_") else pred_name
-        x_vals = df[orig_col]
-        y_vals = df[logodds_col]
-
-        # Bar plot with mean +/- SEM grouped by unique predictor values
-        groups = sorted(x_vals.unique())
-        means = [y_vals[x_vals == g].mean() for g in groups]
-        sems = [y_vals[x_vals == g].std() / np.sqrt((x_vals == g).sum()) for g in groups]
-        x_pos = np.arange(len(groups))
-        ax.bar(x_pos, means, yerr=sems, capsize=4, color='steelblue', alpha=0.7, edgecolor='black')
-        ax.set_xticks(x_pos)
-        ax.set_xticklabels([str(g) for g in groups])
-        ax.set_xlabel(orig_col)
-        ax.axhline(0, color='gray', linewidth=0.5, linestyle='--')
-
-        # Pairwise t-tests between adjacent and skip-1 bars with significance brackets
-        y_max = max(m + s for m, s in zip(means, sems))
-        y_min = min(m - s for m, s in zip(means, sems))
-        bracket_h = (y_max - y_min) * 0.08
-        # Collect all pairs: adjacent (gap=1) then skip-1 (gap=2)
-        pairs = [(i, i + 1) for i in range(len(groups) - 1)]
-        pairs += [(i, i + 2) for i in range(len(groups) - 2)]
-        for level, (i, j) in enumerate(pairs):
-            g1, g2 = groups[i], groups[j]
-            vals1 = y_vals[x_vals == g1].values
-            vals2 = y_vals[x_vals == g2].values
-            t_stat, p_val = scipy_stats.ttest_ind(vals1, vals2)
-            if p_val >= 0.05:
-                label = "n.s."
-            elif p_val < 0.001:
-                label = "***"
-            elif p_val < 0.01:
-                label = "**"
-            else:
-                label = "*"
-            # Draw bracket
-            y_bracket = y_max + bracket_h * (1 + level * 2.5)
-            ax.plot([x_pos[i], x_pos[i], x_pos[j], x_pos[j]],
-                    [y_bracket - bracket_h * 0.3, y_bracket, y_bracket, y_bracket - bracket_h * 0.3],
-                    color='black', linewidth=0.8)
-            ax.text((x_pos[i] + x_pos[j]) / 2, y_bracket, label,
-                    ha='center', va='bottom', fontsize=8)
-
-        ax.set_ylabel(short_label)
         sign = "+" if pred_coef > 0 else ""
-        ax.set_title(f"{orig_col} (Lasso coef: {sign}{pred_coef:.3f})")
+        inset = f"Lasso coef: {sign}{pred_coef:.3f}"
+        make_bar_plot(ax, df, logodds_col, orig_col, inset)
 
-    fig.suptitle(short_label, fontsize=11, fontweight='bold')
+    fig.suptitle(f"LassoCV: {short_label}", fontsize=11, fontweight='bold')
     fig.tight_layout()
-    fig.savefig(f"results/regression_{logodds_col}.png", dpi=150, bbox_inches='tight')
+    fig.savefig(f"results/regression_lasso_{logodds_col}.png", dpi=150, bbox_inches='tight')
+    plt.show()
+
+#%% [code]
+# --- OLS plots (Bonferroni-corrected) ---
+
+print("\n" + "="*80)
+print("OLS vs Lasso: Comparing OLS (Bonferroni-corrected) and LassoCV results")
+print("="*80 + "\n")
+
+for logodds_col in logodds_columns:
+    model = results[logodds_col]
+    pvals = model.pvalues.drop("Intercept")
+    coefs = model.params.drop("Intercept")
+    sig_names = pvals[pvals < ALPHA].index
+    top_names = coefs[sig_names].abs().sort_values(ascending=False).index[:N_TOP].tolist()
+
+    if not top_names:
+        continue
+
+    short_label = logodds_col.replace("logodds_", "log-odds: ").replace("_vs_", " / ").replace("_", " ")
+    n_plots = len(top_names)
+    fig, axes = plt.subplots(1, n_plots, figsize=(5 * n_plots, 4))
+    if n_plots == 1:
+        axes = [axes]
+
+    for ax, pred_name in zip(axes, top_names):
+        if pred_name.startswith("C(") and pred_name.endswith("]"):
+            orig_col = pred_name.split("(")[1].split(")")[0]
+        else:
+            orig_col = pred_name
+        p = pvals[pred_name]
+        c = coefs[pred_name]
+        sig = "***" if p < ALPHA / 10 else "**" if p < ALPHA / 5 else "*" if p < ALPHA else ""
+        inset = f"OLS coef={c:.3f}\np={p:.4f} {sig}"
+        make_bar_plot(ax, df, logodds_col, orig_col, inset)
+
+    fig.suptitle(f"OLS (Bonferroni): {short_label}", fontsize=11, fontweight='bold')
+    fig.tight_layout()
+    fig.savefig(f"results/regression_ols_{logodds_col}.png", dpi=150, bbox_inches='tight')
     plt.show()
 
 #%% [code]
