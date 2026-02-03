@@ -8,6 +8,8 @@ import pandas as pd
 import numpy as np
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
+from sklearn.linear_model import LassoCV, ElasticNetCV
+from sklearn.preprocessing import StandardScaler
 from load_data import load_data_for_experiment, UNIQUE_CHOICE_COLUMNS, UNIQUE_CHOICE_COLUMNS_NO_UNCUED
 
 np.set_printoptions(suppress=True, precision=3)
@@ -26,18 +28,19 @@ ALL_VERSIONS = THREE_TASK_VERSIONS + TWO_TASK_VERSIONS
 LOG_ODDS_PAIRS = [
     ("gpi zero", "policy reuse max rew. test"),
     ("gpi zero", "mb/gpi"),
+    ("policy reuse max rew. test", "mb/gpi"),
     ("policy reuse max rew. test", "policy reuse min rew. test"),
 ]
 
 # Predictor columns from experiment_versions_summary.csv
 PREDICTOR_COLUMNS = [
     "n_tasks",
-    #"n_blocks",
+    "n_blocks",
     "train_trials_per_block",
     "grid_states",
     "total_trajectories",
     "design_type",
-    #"max_pellets",
+    "max_pellets",
 ]
 
 # Pseudocount added to proportions before computing log-odds
@@ -120,7 +123,7 @@ for logodds_col in logodds_columns:
 # Summary table of significant predictors
 
 print(f"\n{'='*80}")
-print("Summary of significant predictors (p < 0.05)")
+print("Summary of OLS significant predictors (p < 0.05)")
 print(f"{'='*80}")
 
 for logodds_col, model in results.items():
@@ -132,5 +135,91 @@ for logodds_col, model in results.items():
         for name, pval in sig.items():
             coef = model.params[name]
             print(f"  {name}: coef={coef:.4f}, p={pval:.4f}")
+
+#%% [code]
+# LassoCV regression (L1 regularization with cross-validated alpha)
+
+# Prepare design matrix: dummy-code categoricals, standardize all predictors
+categorical_cols = [col for col in PREDICTOR_COLUMNS if df[col].dtype == object or col == "design_type"]
+continuous_cols = [col for col in PREDICTOR_COLUMNS if col not in categorical_cols]
+
+X = df[continuous_cols].copy()
+for col in categorical_cols:
+    dummies = pd.get_dummies(df[col], prefix=col, drop_first=True).astype(float)
+    X = pd.concat([X, dummies], axis=1)
+
+feature_names = list(X.columns)
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+lasso_results = {}
+for logodds_col in logodds_columns:
+    y = df[logodds_col].values
+
+    lasso = LassoCV(cv=5, random_state=0, max_iter=10000)
+    lasso.fit(X_scaled, y)
+    lasso_results[logodds_col] = lasso
+
+    print(f"\n{'='*80}")
+    print(f"LassoCV: {logodds_col}")
+    print(f"{'='*80}")
+    print(f"Best alpha: {lasso.alpha_:.6f}")
+    print(f"R² (train): {lasso.score(X_scaled, y):.4f}")
+    print(f"\nCoefficients (standardized):")
+    for name, coef in sorted(zip(feature_names, lasso.coef_), key=lambda x: -abs(x[1])):
+        marker = "" if coef != 0 else " (zeroed)"
+        print(f"  {name:30s}: {coef:+.4f}{marker}")
+
+#%% [code]
+# Plots: dependent vs. most relevant independent variables (from Lasso)
+
+import matplotlib.pyplot as plt
+
+# For each log-odds contrast, pick the top non-zero Lasso predictors
+N_TOP = 3  # number of top predictors to plot per contrast
+
+for logodds_col in logodds_columns:
+    lasso = lasso_results[logodds_col]
+    # Sort by absolute coefficient, keep non-zero
+    coef_pairs = [(name, coef) for name, coef in zip(feature_names, lasso.coef_) if coef != 0]
+    coef_pairs.sort(key=lambda x: -abs(x[1]))
+    top_predictors = coef_pairs[:N_TOP]
+
+    if not top_predictors:
+        continue
+
+    n_plots = len(top_predictors)
+    fig, axes = plt.subplots(1, n_plots, figsize=(5 * n_plots, 4))
+    if n_plots == 1:
+        axes = [axes]
+
+    # Short label for y-axis
+    short_label = logodds_col.replace("logodds_", "log-odds: ").replace("_vs_", " / ").replace("_", " ")
+
+    for ax, (pred_name, pred_coef) in zip(axes, top_predictors):
+        # Map dummy name back to original column
+        orig_col = "design_type" if pred_name.startswith("design_type_") else pred_name
+        x_vals = df[orig_col]
+        y_vals = df[logodds_col]
+
+        # Bar plot with mean +/- SEM grouped by unique predictor values
+        groups = sorted(x_vals.unique())
+        means = [y_vals[x_vals == g].mean() for g in groups]
+        sems = [y_vals[x_vals == g].std() / np.sqrt((x_vals == g).sum()) for g in groups]
+        x_pos = np.arange(len(groups))
+        ax.bar(x_pos, means, yerr=sems, capsize=4, color='steelblue', alpha=0.7, edgecolor='black')
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels([str(g) for g in groups])
+        ax.set_xlabel(orig_col)
+        ax.axhline(0, color='gray', linewidth=0.5, linestyle='--')
+
+        ax.set_ylabel(short_label)
+        sign = "+" if pred_coef > 0 else ""
+        ax.set_title(f"{orig_col} (Lasso coef: {sign}{pred_coef:.3f})")
+
+    fig.suptitle(short_label, fontsize=11, fontweight='bold')
+    fig.tight_layout()
+    fig.savefig(f"results/regression_{logodds_col}.png", dpi=150, bbox_inches='tight')
+    plt.show()
 
 #%% [code]
