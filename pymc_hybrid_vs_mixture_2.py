@@ -28,7 +28,7 @@ np.set_printoptions(suppress=True,precision=3)
 
 from load_data import load_data_for_experiments, load_data_for_experiment
 
-experiment_version = "V0.3_pilot"
+experiment_version = "V1.0_pilot"
 data = load_data_for_experiment(experiment_version)
 
 #experiment_versions = ["V0.3_pilot", "V1.0_pilot", "V1.1_pilot"]
@@ -87,7 +87,10 @@ with pm.Model() as hybrid_model:
     # vectorized Dirichlet–Multinomial over subjects
     pm.DirichletMultinomial("x", a=alpha, n=N, shape=(S, K), observed=counts)
 
-    hybrid_trace = pm.sample(2000, tune=2000, target_accept=0.9, chains=4, idata_kwargs={"log_likelihood": True})
+    hybrid_trace = pm.sample(10000, tune=10000, target_accept=0.95, chains=8, idata_kwargs={"log_likelihood": True}, return_inferencedata=True)
+    # Check convergence
+    print("Hybrid model convergence diagnostics:")
+    print(az.summary(hybrid_trace))
     # predictive accuracy (subject-level pointwise log-lik is handled internally)
     loo_hybrid = az.loo(hybrid_trace)     # or az.waic(idata)
     
@@ -128,7 +131,10 @@ with pm.Model() as mixture_model:
     # mixture across subjects
     pm.Mixture('x', w, comp_dists=[like1, like2], observed=counts)
 
-    mixture_trace = pm.sample(2000, tune=2000, target_accept=0.9, idata_kwargs={"log_likelihood": True})
+    mixture_trace = pm.sample(10000, tune=10000, target_accept=0.95, chains=8, idata_kwargs={"log_likelihood": True}, return_inferencedata=True)
+    # Check convergence
+    print("Mixture model convergence diagnostics:")
+    print(az.summary(mixture_trace))
     loo_mixture = az.loo(mixture_trace)
 
 
@@ -177,7 +183,10 @@ with pm.Model() as mixture_model_3:
     # mixture across subjects
     pm.Mixture('x', w, comp_dists=[like1, like2, like3], observed=counts)
 
-    mixture_trace_3 = pm.sample(2000, tune=2000, target_accept=0.9, idata_kwargs={"log_likelihood": True})
+    mixture_trace_3 = pm.sample(10000, tune=10000, target_accept=0.95, chains=8, idata_kwargs={"log_likelihood": True}, return_inferencedata=True)
+    # Check convergence
+    print("Mixture model 3 convergence diagnostics:")
+    print(az.summary(mixture_trace_3))
     loo_mixture_3 = az.loo(mixture_trace_3)
 
 
@@ -205,7 +214,10 @@ with pm.Model() as hybrid_model_2:
     # vectorized Dirichlet–Multinomial over subjects
     pm.DirichletMultinomial("x", a=alpha, n=N, shape=(S, K), observed=counts)
 
-    hybrid_trace_2 = pm.sample(2000, tune=2000, target_accept=0.9, chains=4, idata_kwargs={"log_likelihood": True})
+    hybrid_trace_2 = pm.sample(10000, tune=10000, target_accept=0.95, chains=8, idata_kwargs={"log_likelihood": True}, return_inferencedata=True)
+    # Check convergence
+    print("Hybrid model 2 convergence diagnostics:")
+    print(az.summary(hybrid_trace_2))
     # predictive accuracy (subject-level pointwise log-lik is handled internally)
     loo_hybrid_2 = az.loo(hybrid_trace_2)
 
@@ -250,10 +262,59 @@ with pm.Model() as mixture_model_4:
     # mixture across subjects
     pm.Mixture('x', w, comp_dists=[like1, like2], observed=counts)
 
-    mixture_trace_4 = pm.sample(2000, tune=2000, target_accept=0.9, idata_kwargs={"log_likelihood": True})
+    mixture_trace_4 = pm.sample(10000, tune=10000, target_accept=0.95, chains=8, idata_kwargs={"log_likelihood": True}, return_inferencedata=True)
+    # Check convergence
+    print("Mixture model 4 convergence diagnostics:")
+    print(az.summary(mixture_trace_4))
     loo_mixture_4 = az.loo(mixture_trace_4)
 
 
+
+
+#%% [code]
+# Comprehensive convergence diagnostics
+
+print("\n" + "="*80)
+print("CONVERGENCE DIAGNOSTICS SUMMARY")
+print("="*80)
+
+traces = {
+    "hybrid": hybrid_trace,
+    "mixture": mixture_trace,
+    "mixture_3": mixture_trace_3,
+    "hybrid_2": hybrid_trace_2,
+    "mixture_4": mixture_trace_4
+}
+
+for name, trace in traces.items():
+    print(f"\n{name.upper()} MODEL:")
+    print("-" * 80)
+    # Get summary which includes R-hat and ESS
+    summary = az.summary(trace)
+    
+    # Extract max R-hat and min ESS from summary
+    if 'r_hat' in summary.columns:
+        max_rhat = float(summary['r_hat'].max())
+        print(f"Max R-hat: {max_rhat:.4f} {'✓' if max_rhat < 1.01 else '✗ WARNING: R-hat > 1.01'}")
+    else:
+        # Fallback: compute directly
+        rhat = az.rhat(trace)
+        max_rhat = float(rhat.max().to_numpy())
+        print(f"Max R-hat: {max_rhat:.4f} {'✓' if max_rhat < 1.01 else '✗ WARNING: R-hat > 1.01'}")
+    
+    if 'ess_bulk' in summary.columns:
+        min_ess = float(summary['ess_bulk'].min())
+        print(f"Min ESS (bulk): {min_ess:.0f} {'✓' if min_ess > 400 else '✗ WARNING: ESS < 400'}")
+    elif 'ess_mean' in summary.columns:
+        min_ess = float(summary['ess_mean'].min())
+        print(f"Min ESS (mean): {min_ess:.0f} {'✓' if min_ess > 400 else '✗ WARNING: ESS < 400'}")
+    else:
+        # Fallback: compute directly
+        ess = az.ess(trace)
+        min_ess = float(ess.min().to_numpy())
+        print(f"Min ESS: {min_ess:.0f} {'✓' if min_ess > 400 else '✗ WARNING: ESS < 400'}")
+
+print("\n" + "="*80 + "\n")
 
 
 #%% [code]
