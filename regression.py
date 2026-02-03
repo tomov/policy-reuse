@@ -174,6 +174,8 @@ for logodds_col in logodds_columns:
 # Plots: dependent vs. most relevant independent variables (from Lasso)
 
 import matplotlib.pyplot as plt
+from scipy import stats as scipy_stats
+from itertools import combinations
 
 # For each log-odds contrast, pick the top non-zero Lasso predictors
 N_TOP = 3  # number of top predictors to plot per contrast
@@ -212,6 +214,34 @@ for logodds_col in logodds_columns:
         ax.set_xticklabels([str(g) for g in groups])
         ax.set_xlabel(orig_col)
         ax.axhline(0, color='gray', linewidth=0.5, linestyle='--')
+
+        # Pairwise t-tests between adjacent and skip-1 bars with significance brackets
+        y_max = max(m + s for m, s in zip(means, sems))
+        y_min = min(m - s for m, s in zip(means, sems))
+        bracket_h = (y_max - y_min) * 0.08
+        # Collect all pairs: adjacent (gap=1) then skip-1 (gap=2)
+        pairs = [(i, i + 1) for i in range(len(groups) - 1)]
+        pairs += [(i, i + 2) for i in range(len(groups) - 2)]
+        for level, (i, j) in enumerate(pairs):
+            g1, g2 = groups[i], groups[j]
+            vals1 = y_vals[x_vals == g1].values
+            vals2 = y_vals[x_vals == g2].values
+            t_stat, p_val = scipy_stats.ttest_ind(vals1, vals2)
+            if p_val >= 0.05:
+                label = "n.s."
+            elif p_val < 0.001:
+                label = "***"
+            elif p_val < 0.01:
+                label = "**"
+            else:
+                label = "*"
+            # Draw bracket
+            y_bracket = y_max + bracket_h * (1 + level * 2.5)
+            ax.plot([x_pos[i], x_pos[i], x_pos[j], x_pos[j]],
+                    [y_bracket - bracket_h * 0.3, y_bracket, y_bracket, y_bracket - bracket_h * 0.3],
+                    color='black', linewidth=0.8)
+            ax.text((x_pos[i] + x_pos[j]) / 2, y_bracket, label,
+                    ha='center', va='bottom', fontsize=8)
 
         ax.set_ylabel(short_label)
         sign = "+" if pred_coef > 0 else ""
